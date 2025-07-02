@@ -12,13 +12,25 @@ st.caption("Updates every 10 seconds. Shows live top 10 coins by 24h volume.")
 @st.cache_data(ttl=10)
 def fetch_market_data():
     url = "https://api.binance.com/api/v3/ticker/24hr"
-    data = requests.get(url).json()
-    df = pd.DataFrame(data)
-    df = df[["symbol", "lastPrice", "priceChangePercent", "quoteVolume"]]
-    df["quoteVolume"] = df["quoteVolume"].astype(float)
-    df["priceChangePercent"] = df["priceChangePercent"].astype(float)
-    df["lastPrice"] = df["lastPrice"].astype(float)
-    return df.sort_values("quoteVolume", ascending=False).head(10)
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+
+        if not isinstance(data, list):
+            st.error("⚠️ Binance API returned unexpected data format.")
+            return pd.DataFrame()
+
+        df = pd.DataFrame(data)
+        df = df[["symbol", "lastPrice", "priceChangePercent", "quoteVolume"]]
+        df["quoteVolume"] = df["quoteVolume"].astype(float)
+        df["priceChangePercent"] = df["priceChangePercent"].astype(float)
+        df["lastPrice"] = df["lastPrice"].astype(float)
+        return df.sort_values("quoteVolume", ascending=False).head(10)
+
+    except Exception as e:
+        st.error(f"❌ Error fetching data from Binance API:\n\n{e}")
+        return pd.DataFrame()
 
 def format_change(pct):
     return f"🔺 {pct:.2f}%" if pct > 0 else f"🔻 {pct:.2f}%"
@@ -45,43 +57,48 @@ if "history" not in st.session_state:
 
 # Fetch data
 df = fetch_market_data()
-df["Change (24h)"] = df["priceChangePercent"].apply(format_change)
-df["Suggestion"] = df.apply(suggest_investment, axis=1)
-df["Prediction"] = df.apply(predict_movement, axis=1)
 
-# Format price and volume with $
-df["Last Price (USDT)"] = df["lastPrice"].apply(lambda x: f"${x:,.2f}")
-df["24h Volume (USDT)"] = df["quoteVolume"].apply(lambda x: f"${x:,.0f}")
+# Only proceed if we have data
+if not df.empty:
+    df["Change (24h)"] = df["priceChangePercent"].apply(format_change)
+    df["Suggestion"] = df.apply(suggest_investment, axis=1)
+    df["Prediction"] = df.apply(predict_movement, axis=1)
 
-# Update session history
-for _, row in df.iterrows():
-    symbol = row["symbol"]
-    price = row["lastPrice"]
-    if symbol not in st.session_state.history:
-        st.session_state.history[symbol] = []
-    st.session_state.history[symbol].append(price)
-    st.session_state.history[symbol] = st.session_state.history[symbol][-30:]
+    # Format price and volume with $
+    df["Last Price (USDT)"] = df["lastPrice"].apply(lambda x: f"${x:,.2f}")
+    df["24h Volume (USDT)"] = df["quoteVolume"].apply(lambda x: f"${x:,.0f}")
 
-# Display table
-st.subheader("📋 Top 10 Coins by Volume")
-st.dataframe(
-    df[["symbol", "Last Price (USDT)", "Change (24h)", "Suggestion", "Prediction", "24h Volume (USDT)"]]
-      .rename(columns={"symbol": "Symbol"}),
-    use_container_width=True,
-    hide_index=True
-)
+    # Update session history
+    for _, row in df.iterrows():
+        symbol = row["symbol"]
+        price = row["lastPrice"]
+        if symbol not in st.session_state.history:
+            st.session_state.history[symbol] = []
+        st.session_state.history[symbol].append(price)
+        st.session_state.history[symbol] = st.session_state.history[symbol][-30:]
 
-# Display charts
-st.subheader("📈 Price Trend Charts (Last 5 minutes, 10s intervals)")
+    # Display table
+    st.subheader("📋 Top 10 Coins by Volume")
+    st.dataframe(
+        df[["symbol", "Last Price (USDT)", "Change (24h)", "Suggestion", "Prediction", "24h Volume (USDT)"]]
+          .rename(columns={"symbol": "Symbol"}),
+        use_container_width=True,
+        hide_index=True
+    )
 
-cols = st.columns(2)
-for i, (symbol, prices) in enumerate(list(st.session_state.history.items())[:6]):
-    with cols[i % 2]:
-        st.markdown(f"**{symbol}**")
-        fig, ax = plt.subplots()
-        ax.plot(prices, marker='o')
-        ax.set_title(f"{symbol} Price Trend")
-        ax.set_xlabel("Ticks (10s interval)")
-        ax.set_ylabel("Price (USDT)")
-        ax.grid(True)
-        st.pyplot(fig)
+    # Display charts
+    st.subheader("📈 Price Trend Charts (Last 5 minutes, 10s intervals)")
+
+    cols = st.columns(2)
+    for i, (symbol, prices) in enumerate(list(st.session_state.history.items())[:6]):
+        with cols[i % 2]:
+            st.markdown(f"**{symbol}**")
+            fig, ax = plt.subplots()
+            ax.plot(prices, marker='o')
+            ax.set_title(f"{symbol} Price Trend")
+            ax.set_xlabel("Ticks (10s interval)")
+            ax.set_ylabel("Price (USDT)")
+            ax.grid(True)
+            st.pyplot(fig)
+else:
+    st.warning("🔄 Waiting for valid data from Binance API...")
