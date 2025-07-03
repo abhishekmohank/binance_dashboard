@@ -1,11 +1,16 @@
 import streamlit as st
+from streamlit_autorefresh import st_autorefresh
 import pandas as pd
 import requests
 import matplotlib.pyplot as plt
 
-# Page config
+# Page setup
 st.set_page_config(page_title="Binance Crypto Tracker", layout="wide")
 st.title("📊 Binance Crypto Market Dashboard")
+
+# 🔁 Auto-refresh every 10 seconds
+st_autorefresh(interval=10 * 1000, limit=None, key="auto_refresh")
+
 st.caption("Updates every 10 seconds. Shows live top 10 coins by 24h volume.")
 
 # Currency symbols
@@ -17,7 +22,7 @@ currency_symbols = {
     "JPY": "¥"
 }
 
-# Live + fallback exchange rates
+# Hybrid exchange rate: live + fallback
 def get_exchange_rate(to_currency):
     manual_rates = {
         "USD": 1,
@@ -41,7 +46,7 @@ def get_exchange_rate(to_currency):
 
         return data["rates"][to_currency]
     except Exception as e:
-        st.warning(f"⚠️ Could not fetch live rate for {to_currency}. Using manual fallback.\n\nError: {e}")
+        st.warning(f"⚠️ Could not fetch live rate for {to_currency}. Using fallback.\n\nError: {e}")
         return manual_rates.get(to_currency, 1)
 
 # Fetch Binance market data
@@ -65,7 +70,7 @@ def fetch_market_data():
         st.error(f"❌ Error fetching Binance data: {e}")
         return pd.DataFrame()
 
-# Formatting & prediction helpers
+# Helpers
 def format_change(pct):
     return f"🔺 {pct:.2f}%" if pct > 0 else f"🔻 {pct:.2f}%"
 
@@ -85,22 +90,21 @@ def predict_movement(row):
     else:
         return "❓ Uncertain"
 
-# Sidebar controls
+# Sidebar
 st.sidebar.header("🔧 Options")
 show_market_tip = st.sidebar.checkbox("💡 Show Market Tip", True)
 show_drop_alert = st.sidebar.checkbox("📉 Show Drop Alert", True)
-
 st.sidebar.markdown("💱 **Currency Conversion**")
 currency = st.sidebar.selectbox("Convert to:", ["USD", "INR", "EUR", "GBP", "JPY"], index=0)
 exchange_rate = get_exchange_rate(currency)
 currency_symbol = currency_symbols.get(currency, "$")
-st.sidebar.caption("🔁 Live rates used when possible. Falls back to manual if needed.")
+st.sidebar.caption("🔁 Uses live rates with fallback to manual.")
 
 # Track chart history
 if "history" not in st.session_state:
     st.session_state.history = {}
 
-# Fetch market data
+# Fetch data
 df = fetch_market_data()
 
 if not df.empty:
@@ -108,22 +112,22 @@ if not df.empty:
     df["Suggestion"] = df.apply(suggest_investment, axis=1)
     df["Prediction"] = df.apply(predict_movement, axis=1)
 
-    # Convert prices
+    # Convert price/volume
     df["converted_price"] = df["lastPrice"] * exchange_rate
     df["converted_volume"] = df["quoteVolume"] * exchange_rate
     df["Last Price"] = df["converted_price"].apply(lambda x: f"{currency_symbol}{x:,.2f}")
     df["24h Volume"] = df["converted_volume"].apply(lambda x: f"{currency_symbol}{x:,.0f}")
 
-    # Market tip box
+    # Market tip
     if show_market_tip:
         rising = df[df["Prediction"] == "📈 Likely ↑"]
         if not rising.empty:
             coins = ", ".join(rising["symbol"].tolist())
-            st.success(f"💡 **Market Tip**: Watch or consider buying: **{coins}** — likely to rise.")
+            st.success(f"💡 **Market Tip**: Watch or buy: **{coins}** — trending up.")
         else:
-            st.info("🔎 No strong upward trends currently.")
+            st.info("🔎 No strong upward trends right now.")
 
-    # Drop alert box
+    # Drop alert
     if show_drop_alert:
         falling = df[df["Prediction"] == "📉 Likely ↓"]
         if not falling.empty:
@@ -132,7 +136,7 @@ if not df.empty:
         else:
             st.info("✅ No sharp drops detected.")
 
-    # Save trend history
+    # Update chart history
     for _, row in df.iterrows():
         sym = row["symbol"]
         price = row["converted_price"]
@@ -150,7 +154,7 @@ if not df.empty:
         hide_index=True
     )
 
-    # Display trend charts
+    # Display charts
     st.subheader("📈 Price Trend Charts (Last 5 minutes, 10s intervals)")
     cols = st.columns(2)
     for i, (symbol, prices) in enumerate(list(st.session_state.history.items())[:6]):
@@ -159,7 +163,7 @@ if not df.empty:
             fig, ax = plt.subplots()
             ax.plot(prices, marker='o')
             ax.set_title(f"{symbol} Price Trend ({currency})")
-            ax.set_xlabel("Ticks (10s interval)")
+            ax.set_xlabel("Ticks (10s)")
             ax.set_ylabel(f"Price ({currency_symbol})")
             ax.grid(True)
             st.pyplot(fig)
