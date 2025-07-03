@@ -14,28 +14,34 @@ This project is a real-time cryptocurrency market tracker built using **Streamli
 ## 🧠 Features
 
 - ✅ **Top 10 Coins by 24h Volume**
-- 📈 **Live Price Updates** (every 10 seconds)
+- 🔄 **Auto-refresh every 10 seconds**
 - 🔺 **Price Change with Emoji Indicators**
-- 💡 **Smart Suggestions**:
-  - Trending Up
-  - Falling
-  - Neutral
-- 🔮 **Movement Prediction** (based on price % change)
-- 📊 **Price Trend Graphs** for each coin (last 5 minutes)
-- 💵 **Formatted Price & Volume with $**
+- 💡 **Market Suggestions** (Trending Up / Avoid / Neutral)
+- 🔮 **Prediction Labels** (Likely ↑ / ↓ / Uncertain)
+- 📈 **Trendline Charts** (Last 5 minutes of activity)
+- 💵 **Currency Conversion Support**
+  - Supports USD, INR, EUR, GBP, JPY
+  - Uses live exchange rates via `exchangerate.host`
+  - Falls back to manual rates if the API fails
+- 🧭 **Sidebar Controls**:
+  - Toggle Market Tips
+  - Toggle Drop Alerts
+  - Select preferred currency
 - 🧠 Optimized with `@st.cache_data` for smooth refresh
+- 🌐 Fully interactive via Streamlit UI
 
 ---
 
 ## 📦 Tech Stack
 
-| Tool        | Purpose                           |
-|-------------|-----------------------------------|
-| `Streamlit` | Web UI + real-time interactivity  |
-| `Binance API` | Live crypto market data        |
-| `Pandas`    | Data processing and transformation|
-| `Matplotlib`| Price trend visualization         |
-| `Requests`  | REST API access                   |
+| Tool               | Purpose                            |
+|--------------------|------------------------------------|
+| `Streamlit`        | Web UI + real-time interactivity   |
+| `Binance API`      | Live crypto market data            |
+| `exchangerate.host`| Live USD-to-currency conversion    |
+| `Pandas`           | Data processing and transformation |
+| `Matplotlib`       | Price trend visualization          |
+| `Requests`         | REST API access                    |
 
 ---
 
@@ -61,31 +67,44 @@ If the online version fails (due to Binance API block), run the app locally:
 
 ---
 
-## 🛑 Known Issue (Streamlit Cloud & Binance)
+## 🛑 Known Issues
 
-> Binance occasionally **blocks traffic from certain cloud hosting providers** including **Streamlit Cloud**, causing the app to fail with:
+> Binance may **block Streamlit Cloud or other hosts** in certain regions, resulting in:
 > ```
 > 451 Client Error: Unavailable For Legal Reasons
 > ```
-> This is outside of the app’s control. If this happens:
-> - ✅ Run it **locally** (works perfectly)
-> - ✅ Or deploy on another platform like **Render**, **Replit**, or a **VPS**
+> ✅ This app works fine on:
+> - Your **local machine**
+> - Platforms like **Render**, **Replit**, or **a personal VPS**
 
 ---
 
-## 🧪 Coming Features (Optional Ideas)
+## ✅ Updates & Enhancements
 
-- 🌍 Currency conversion (USD, INR, EUR, etc.)
-- 🔔 Threshold-based price alerts
-- 📤 Export top 10 data to CSV
-- 📱 Responsive design for mobile
+- ✅ Market tip system showing top trending coins
+- ✅ Drop alert system warning against falling assets
+- ✅ Live currency conversion with USD, INR, EUR, GBP, JPY
+- ✅ Fallback to manual conversion if API fails
+- ✅ Smart emoji-based prediction and suggestions
+- ✅ Live trend charting using Matplotlib
+- ✅ Sidebar toggles and currency selector
+
+---
+
+## 🧪 Future Enhancements (Optional Ideas)
+
+- 📤 Export table to CSV or JSON
+- 📱 Make layout responsive on mobile
+- 🔔 Add custom alerts (e.g., if price > X)
+- 🧠 Basic ML for short-term trend prediction
 
 ---
 
 ## 🙋‍♂️ About the Author
 
 Made with ❤️ by **Abhishek Mohan**  
-📍 [GitHub](https://github.com/abhishekmohank)
+🔗 [GitHub](https://github.com/abhishekmohank)  
+🌐 [Portfolio](https://abhishek-amk.vercel.app)
 
 ---
 

@@ -1,14 +1,50 @@
 import streamlit as st
 import pandas as pd
 import requests
-import time
 import matplotlib.pyplot as plt
 
-# Streamlit config
+# Page config
 st.set_page_config(page_title="Binance Crypto Tracker", layout="wide")
 st.title("📊 Binance Crypto Market Dashboard")
 st.caption("Updates every 10 seconds. Shows live top 10 coins by 24h volume.")
 
+# Currency symbols
+currency_symbols = {
+    "USD": "$",
+    "INR": "₹",
+    "EUR": "€",
+    "GBP": "£",
+    "JPY": "¥"
+}
+
+# Live + fallback exchange rates
+def get_exchange_rate(to_currency):
+    manual_rates = {
+        "USD": 1,
+        "INR": 83.2,
+        "EUR": 0.92,
+        "GBP": 0.78,
+        "JPY": 157.6
+    }
+
+    if to_currency == "USD":
+        return 1
+
+    try:
+        url = f"https://api.exchangerate.host/latest?base=USD&symbols={to_currency}"
+        response = requests.get(url, timeout=5)
+        response.raise_for_status()
+        data = response.json()
+
+        if not data.get("success") or to_currency not in data.get("rates", {}):
+            raise ValueError("Invalid exchange rate response.")
+
+        return data["rates"][to_currency]
+    except Exception as e:
+        st.warning(f"⚠️ Could not fetch live rate for {to_currency}. Using manual fallback.\n\nError: {e}")
+        return manual_rates.get(to_currency, 1)
+
+# Fetch Binance market data
 @st.cache_data(ttl=10)
 def fetch_market_data():
     url = "https://api.binance.com/api/v3/ticker/24hr"
@@ -16,22 +52,20 @@ def fetch_market_data():
         response = requests.get(url, timeout=10)
         response.raise_for_status()
         data = response.json()
-
         if not isinstance(data, list):
-            st.error("⚠️ Binance API returned unexpected data format.")
+            st.error("⚠️ Binance API returned unexpected format.")
             return pd.DataFrame()
-
         df = pd.DataFrame(data)
         df = df[["symbol", "lastPrice", "priceChangePercent", "quoteVolume"]]
         df["quoteVolume"] = df["quoteVolume"].astype(float)
         df["priceChangePercent"] = df["priceChangePercent"].astype(float)
         df["lastPrice"] = df["lastPrice"].astype(float)
         return df.sort_values("quoteVolume", ascending=False).head(10)
-
     except Exception as e:
-        st.error(f"❌ Error fetching data from Binance API:\n\n{e}")
+        st.error(f"❌ Error fetching Binance data: {e}")
         return pd.DataFrame()
 
+# Formatting & prediction helpers
 def format_change(pct):
     return f"🔺 {pct:.2f}%" if pct > 0 else f"🔻 {pct:.2f}%"
 
@@ -53,74 +87,80 @@ def predict_movement(row):
 
 # Sidebar controls
 st.sidebar.header("🔧 Options")
-show_market_tip = st.sidebar.checkbox("💡 Show Upward Market Tip", value=True)
-show_drop_alert = st.sidebar.checkbox("📉 Show Drop Alert", value=True)
+show_market_tip = st.sidebar.checkbox("💡 Show Market Tip", True)
+show_drop_alert = st.sidebar.checkbox("📉 Show Drop Alert", True)
 
-# Track price history
+st.sidebar.markdown("💱 **Currency Conversion**")
+currency = st.sidebar.selectbox("Convert to:", ["USD", "INR", "EUR", "GBP", "JPY"], index=0)
+exchange_rate = get_exchange_rate(currency)
+currency_symbol = currency_symbols.get(currency, "$")
+st.sidebar.caption("🔁 Live rates used when possible. Falls back to manual if needed.")
+
+# Track chart history
 if "history" not in st.session_state:
     st.session_state.history = {}
 
-# Fetch data
+# Fetch market data
 df = fetch_market_data()
 
-# Only proceed if we have data
 if not df.empty:
     df["Change (24h)"] = df["priceChangePercent"].apply(format_change)
     df["Suggestion"] = df.apply(suggest_investment, axis=1)
     df["Prediction"] = df.apply(predict_movement, axis=1)
 
-    # 💡 Market Tip (Upward)
+    # Convert prices
+    df["converted_price"] = df["lastPrice"] * exchange_rate
+    df["converted_volume"] = df["quoteVolume"] * exchange_rate
+    df["Last Price"] = df["converted_price"].apply(lambda x: f"{currency_symbol}{x:,.2f}")
+    df["24h Volume"] = df["converted_volume"].apply(lambda x: f"{currency_symbol}{x:,.0f}")
+
+    # Market tip box
     if show_market_tip:
-        rising_coins = df[df["Prediction"] == "📈 Likely ↑"]
-        if not rising_coins.empty:
-            suggested = ", ".join(rising_coins["symbol"].tolist())
-            st.success(f"💡 **Market Tip**: You may consider watching or buying: **{suggested}** — these coins are showing upward momentum.")
+        rising = df[df["Prediction"] == "📈 Likely ↑"]
+        if not rising.empty:
+            coins = ", ".join(rising["symbol"].tolist())
+            st.success(f"💡 **Market Tip**: Watch or consider buying: **{coins}** — likely to rise.")
         else:
-            st.info("🔎 No strong upward trends detected at the moment.")
+            st.info("🔎 No strong upward trends currently.")
 
-    # 🛑 Drop Alert (Downward)
+    # Drop alert box
     if show_drop_alert:
-        dropping_coins = df[df["Prediction"] == "📉 Likely ↓"]
-        if not dropping_coins.empty:
-            danger = ", ".join(dropping_coins["symbol"].tolist())
-            st.warning(f"⚠️ **Drop Alert**: Watch out! These coins are dropping fast: **{danger}**.")
+        falling = df[df["Prediction"] == "📉 Likely ↓"]
+        if not falling.empty:
+            coins = ", ".join(falling["symbol"].tolist())
+            st.warning(f"⚠️ **Drop Alert**: Falling coins: **{coins}**. Watch out.")
         else:
-            st.info("✅ No sharp drops detected at this time.")
+            st.info("✅ No sharp drops detected.")
 
-    # Format price and volume with $
-    df["Last Price (USDT)"] = df["lastPrice"].apply(lambda x: f"${x:,.2f}")
-    df["24h Volume (USDT)"] = df["quoteVolume"].apply(lambda x: f"${x:,.0f}")
-
-    # Update session history
+    # Save trend history
     for _, row in df.iterrows():
-        symbol = row["symbol"]
-        price = row["lastPrice"]
-        if symbol not in st.session_state.history:
-            st.session_state.history[symbol] = []
-        st.session_state.history[symbol].append(price)
-        st.session_state.history[symbol] = st.session_state.history[symbol][-30:]
+        sym = row["symbol"]
+        price = row["converted_price"]
+        if sym not in st.session_state.history:
+            st.session_state.history[sym] = []
+        st.session_state.history[sym].append(price)
+        st.session_state.history[sym] = st.session_state.history[sym][-30:]
 
     # Display table
-    st.subheader("📋 Top 10 Coins by Volume")
+    st.subheader(f"📋 Top 10 Coins by Volume ({currency})")
     st.dataframe(
-        df[["symbol", "Last Price (USDT)", "Change (24h)", "Suggestion", "Prediction", "24h Volume (USDT)"]]
+        df[["symbol", "Last Price", "Change (24h)", "Suggestion", "Prediction", "24h Volume"]]
           .rename(columns={"symbol": "Symbol"}),
         use_container_width=True,
         hide_index=True
     )
 
-    # Display charts
+    # Display trend charts
     st.subheader("📈 Price Trend Charts (Last 5 minutes, 10s intervals)")
-
     cols = st.columns(2)
     for i, (symbol, prices) in enumerate(list(st.session_state.history.items())[:6]):
         with cols[i % 2]:
             st.markdown(f"**{symbol}**")
             fig, ax = plt.subplots()
             ax.plot(prices, marker='o')
-            ax.set_title(f"{symbol} Price Trend")
+            ax.set_title(f"{symbol} Price Trend ({currency})")
             ax.set_xlabel("Ticks (10s interval)")
-            ax.set_ylabel("Price (USDT)")
+            ax.set_ylabel(f"Price ({currency_symbol})")
             ax.grid(True)
             st.pyplot(fig)
 else:
