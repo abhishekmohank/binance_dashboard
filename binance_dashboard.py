@@ -51,6 +51,11 @@ def predict_movement(row):
     else:
         return "❓ Uncertain"
 
+# Sidebar controls
+st.sidebar.header("🔧 Options")
+show_market_tip = st.sidebar.checkbox("💡 Show Upward Market Tip", value=True)
+show_drop_alert = st.sidebar.checkbox("📉 Show Drop Alert", value=True)
+
 # Track price history
 if "history" not in st.session_state:
     st.session_state.history = {}
@@ -64,13 +69,23 @@ if not df.empty:
     df["Suggestion"] = df.apply(suggest_investment, axis=1)
     df["Prediction"] = df.apply(predict_movement, axis=1)
 
-    # 💡 Market Tip section
-    rising_coins = df[df["Prediction"] == "📈 Likely ↑"]
-    if not rising_coins.empty:
-        suggested = ", ".join(rising_coins["symbol"].tolist())
-        st.success(f"💡 **Market Tip**: You may consider watching or buying: **{suggested}** — these coins are showing upward momentum.")
-    else:
-        st.info("🔎 No strong upward trends detected at the moment.")
+    # 💡 Market Tip (Upward)
+    if show_market_tip:
+        rising_coins = df[df["Prediction"] == "📈 Likely ↑"]
+        if not rising_coins.empty:
+            suggested = ", ".join(rising_coins["symbol"].tolist())
+            st.success(f"💡 **Market Tip**: You may consider watching or buying: **{suggested}** — these coins are showing upward momentum.")
+        else:
+            st.info("🔎 No strong upward trends detected at the moment.")
+
+    # 🛑 Drop Alert (Downward)
+    if show_drop_alert:
+        dropping_coins = df[df["Prediction"] == "📉 Likely ↓"]
+        if not dropping_coins.empty:
+            danger = ", ".join(dropping_coins["symbol"].tolist())
+            st.warning(f"⚠️ **Drop Alert**: Watch out! These coins are dropping fast: **{danger}**.")
+        else:
+            st.info("✅ No sharp drops detected at this time.")
 
     # Format price and volume with $
     df["Last Price (USDT)"] = df["lastPrice"].apply(lambda x: f"${x:,.2f}")
