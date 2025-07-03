@@ -64,6 +64,14 @@ if not df.empty:
     df["Suggestion"] = df.apply(suggest_investment, axis=1)
     df["Prediction"] = df.apply(predict_movement, axis=1)
 
+    # 💡 Market Tip section
+    rising_coins = df[df["Prediction"] == "📈 Likely ↑"]
+    if not rising_coins.empty:
+        suggested = ", ".join(rising_coins["symbol"].tolist())
+        st.success(f"💡 **Market Tip**: You may consider watching or buying: **{suggested}** — these coins are showing upward momentum.")
+    else:
+        st.info("🔎 No strong upward trends detected at the moment.")
+
     # Format price and volume with $
     df["Last Price (USDT)"] = df["lastPrice"].apply(lambda x: f"${x:,.2f}")
     df["24h Volume (USDT)"] = df["quoteVolume"].apply(lambda x: f"${x:,.0f}")
